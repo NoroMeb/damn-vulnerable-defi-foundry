@@ -36,7 +36,7 @@ case $1 in
     ;;
 
   puppet | 8 | pupp)
-    forge test --match-contract Puppet --no-match-contract PuppetV2
+    forge test --match-contract Puppet --no-match-contract PuppetV2 -vvvv
     ;;
 
   puppet-v2 | 9 | pupp2)
